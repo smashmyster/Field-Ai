@@ -20,12 +20,7 @@ import { log } from 'console';
     cors: { 
         origin: '*',
         credentials: true,
-    },
-    transports: ['websocket', 'polling'],  // Allow both websocket and polling for proxy compatibility
-    namespace: '/',                        // Default namespace
-    allowEIO3: true,                      // Allow Engine.IO v3 clients
-    // Note: No port specified - will use same port as HTTP server (works with reverse proxy)
-    // For production: Make sure nginx/apache is configured to forward WebSocket upgrades
+    }
 })
 export class SttGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
     @WebSocketServer()
