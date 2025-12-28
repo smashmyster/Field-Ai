@@ -122,7 +122,7 @@ export class ElevenLabsService {
         const filename = `voice_${timestamp}.mp3`;
         const filePath = path.join(voiceDir, filename);
 
-        const audio = await this.elevenlabs.textToSpeech.convert('SAz9YHcvj6GT2YYXdXww', {
+        const audio = await this.elevenlabs.textToSpeech.convert('IKne3meq5aSn9XLyUdCD', {
             text: text,
             modelId: 'eleven_multilingual_v2',
             outputFormat: 'mp3_44100_128',
