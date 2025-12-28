@@ -6,6 +6,7 @@ import {
     ConnectedSocket,
     OnGatewayConnection,
     OnGatewayDisconnect,
+    OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { RealtimeConnection, RealtimeEvents } from '@elevenlabs/elevenlabs-js';
@@ -23,10 +24,20 @@ import { log } from 'console';
     transports: ['websocket', 'polling'],  // Allow both websocket and polling for proxy compatibility
     namespace: '/',                        // Default namespace
     allowEIO3: true,                      // Allow Engine.IO v3 clients
+    // Note: No port specified - will use same port as HTTP server (works with reverse proxy)
+    // For production: Make sure nginx/apache is configured to forward WebSocket upgrades
 })
-export class SttGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SttGateway implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit {
     @WebSocketServer()
     server: Server;
+
+    afterInit(server: Server) {
+        console.log('WebSocket Gateway initialized and attached to main server');
+        // Configure server for production behind reverse proxy
+        server?.engine?.on('connection_error', (err) => {
+            console.error('WebSocket connection error:', err);
+        });
+    }
 
     constructor(
         private eleven: ElevenLabsService,
