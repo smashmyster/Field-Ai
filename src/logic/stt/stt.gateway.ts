@@ -16,9 +16,13 @@ import { Inject, forwardRef } from '@nestjs/common';
 import * as fs from 'fs';
 import { log } from 'console';
 @WebSocketGateway({
-    cors: { origin: '*' },
-    transports: ['websocket'],     // <--- FORCE websocket
-    namespace: '/',                // <--- ENSURE default namespace
+    cors: { 
+        origin: '*',
+        credentials: true,
+    },
+    transports: ['websocket', 'polling'],  // Allow both websocket and polling for proxy compatibility
+    namespace: '/',                        // Default namespace
+    allowEIO3: true,                      // Allow Engine.IO v3 clients
 })
 export class SttGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()
