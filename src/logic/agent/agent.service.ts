@@ -34,14 +34,14 @@ export class AgentService {
   ) {
   }
 
-  async plan(message: string, userId: number, conversationId?: number, sources?: string[],isVoiceMode?: boolean) {
+  async plan(message: string, userId: number, conversationId?: number, sources?: string[], isVoiceMode?: boolean) {
     const user = await this.authService.getProfile(userId);
     let conversation =
       await this.conversationService.ensureConversation(
         user.id,
         conversationId,
       );
-    
+
     // Process images if sources are provided
     let visionResult = null;
     const imageArtifactIds: string[] = sources || [];
@@ -54,17 +54,17 @@ export class AgentService {
         throw new Error(`Image not found for artifactId: ${firstArtifactId}`);
       }
       visionResult = await this.runVision(localPath);
-      
+
       // Save vision results to conversation context
       await this.updateConversationContext(conversation.id, [{
         task: TaskItem.VISION,
         data: visionResult,
       }]);
-      
+
       // Refresh conversation to get updated contextFrame
       conversation = await this.conversationService.getConversation(conversation.id);
     }
-    
+
     const originalLanguage =
       await this.geminiService.detectLanguage(message, user.id);
     let englishQuery = message;
@@ -81,6 +81,7 @@ export class AgentService {
     // Note: We detect intent BEFORE saving the current message so history excludes it
     const intent = await this.detectIntent(englishQuery, conversation.contextFrame, conversation.id, user.id);
     // Save user message
+    console.log('intent', intent);
     const saveMessage: Message = {
       id: 0,
       conversation,
@@ -92,12 +93,12 @@ export class AgentService {
       metadata: {},
       createdAt: new Date(),
     };
-    
+
     const savedUserMessage = await this.conversationService.saveMessage(
       conversation.id,
       saveMessage,
     );
-    
+
     // Link images to the message if sources are provided
     if (imageArtifactIds.length > 0) {
       await this.imageService.linkImagesToMessage(imageArtifactIds, savedUserMessage.id);
@@ -108,9 +109,9 @@ export class AgentService {
 
     // Step 3: Generate answer using Gemini with intent and data
     const state = {
-        userId: user.id,
-        conversationId: conversation.id,
-        contextFrame: conversation.contextFrame || {},
+      userId: user.id,
+      conversationId: conversation.id,
+      contextFrame: conversation.contextFrame || {},
     };
 
     const answerPrompt = generateAnswerPrompt(englishQuery, intent, state, dataResults);
@@ -144,21 +145,21 @@ export class AgentService {
     // Update conversation context with fetched data
     const contextUpdates = this.prepareContextUpdates(dataResults, visionResult);
     await this.updateConversationContext(conversation.id, contextUpdates);
-    
+
     // Generate and update title if conversation doesn't have one
     const updatedConversation = await this.conversationService.generateAndUpdateTitle(
       conversation.id,
       savedUserMessage.content,
       user.id
     );
-    const refreshedConversation = updatedConversation 
+    const refreshedConversation = updatedConversation
       ? await this.conversationService.getConversation(updatedConversation.id)
       : await this.conversationService.getConversation(conversation.id);
 
     const audioPath = isVoiceMode ? await this.elevenlabsService.generateAudio(finalAnswer) : null;//'http://localhost:4000/voice/voice_1764709916703.mp3';
-    
+
     return {
-      answer: finalAnswer, 
+      answer: finalAnswer,
       conversation: refreshedConversation,
       results: contextUpdates,
       audioPath
@@ -171,7 +172,7 @@ export class AgentService {
   private async detectIntent(query: string, contextFrame: any, conversationId: number, userId: number): Promise<any> {
     // Get last 10 messages for context
     const messages = await this.conversationService.getRecentHistoryAsc(conversationId, 10);
-    
+
     // Format conversation history
     let historyText = '';
     if (messages.length > 0) {
@@ -185,7 +186,7 @@ export class AgentService {
 
     const contextHint = this.buildContextHint(contextFrame);
     const prompt = `${CLASSIFIER_PROMPT}${historyText}\n\nCURRENT USER QUERY: "${query}"${contextHint ? `\n\nCONTEXT: ${contextHint}` : ''}\n\nReturn ONLY valid JSON:`;
-    
+
     try {
       const response = await this.geminiService.generateContentStream(prompt, userId);
       const jsonText = response.text?.trim() || '{}';
@@ -222,6 +223,7 @@ export class AgentService {
     conversation: any,
     visionResult: any,
   ): Promise<any> {
+    
     const conversationContext = conversation.contextFrame || {};
     const dataResults: any = {};
 
@@ -239,11 +241,11 @@ export class AgentService {
     }
 
     // Handle chemical lookup
-    if (intent.needs.db_chemical) {
+    if (intent.needs.db_chemical||intent.needs.vector_search) {
       let chemicalName = intent.targets.chemical;
       const crop = intent.targets.crop;
       const pest = intent.targets.pestOrDisease;
-      
+
       // Use chemical from context if not provided
       if (!chemicalName) {
         const bestMatch = conversationContext.bestMatch || conversationContext.chemical?.bestMatch;
@@ -255,14 +257,15 @@ export class AgentService {
       // Search if we have: chemical name, OR crop, OR pest
       // This allows searching for "chemicals for moths on cabbage" even without a specific chemical name
       if (chemicalName || crop || pest) {
+        
         // Build query: use chemical name if provided, otherwise use crop + pest for semantic search
         let query = chemicalName || '';
-        
+
         // If we have crop and/or pest, pass them separately for better semantic search
         const chemicalResult: any = await this.findChemical(
-          query, 
-          conversationContext, 
-          crop, 
+          query,
+          conversationContext,
+          crop,
           pest
         );
         dataResults.chemical = chemicalResult?.data;
@@ -312,21 +315,21 @@ export class AgentService {
         task: TaskItem.VISION,
         data: visionResult,
       });
-      
+
       if (visionResult.crop) {
         contextUpdates.push({
           task: TaskItem.CROP,
           data: visionResult.crop,
         });
       }
-      
+
       if (visionResult.pest) {
         contextUpdates.push({
           task: TaskItem.PEST,
           data: visionResult.pest,
         });
       }
-      
+
       if (visionResult.chemical) {
         contextUpdates.push({
           task: TaskItem.CHEMICAL,
@@ -471,7 +474,7 @@ export class AgentService {
     const chemicals = await this.chemicalService.getChemicalByCropPest(result.crop_id, result.disease_id);
     const crop = crops.find(c => c.id == result.crop_id);
     const pest = pests.find(p => p.id == result.disease_id);
-    const chemicalData=chemicals.map(c=>c.chemical);
+    const chemicalData = chemicals.map(c => c.chemical);
 
     return {
       crop,

@@ -22,7 +22,6 @@ export class ChemicalService {
         if (!query && !crop && !pest) {
             return conversationContext?.chemical;
         }
-
         // Build a semantic query for better embedding search
         let semanticQuery = query;
         if (crop && pest) {
@@ -48,6 +47,7 @@ export class ChemicalService {
         });
         let bestMatch = null;
         const products_p = check.hits.hits.map((hit: any) => ({ id: hit._source?.id, score: hit._score, name: hit._source?.name, description: hit._source?.searchText }));
+        // console.log('products_p', products_p);
         let filteredProducts = products_p.filter((product: any) =>  product?.name?.toLowerCase().includes(query.toLowerCase()));
         // //console.log('filteredProducts', filteredProducts);
         if (filteredProducts.length === 0 && products_p.length > 0) {
