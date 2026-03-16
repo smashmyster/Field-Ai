@@ -38,12 +38,40 @@ export class DataProcessing {
         private cropProductRepository: Repository<CropProduct>,
         @InjectRepository(CropPest)
         private cropPestRepository: Repository<CropPest>,
+        @InjectRepository(Chemical)
+        private productRepository: Repository<Chemical>,
         private readonly configService: ConfigService,
     ) {
         this.openai = new OpenAI({ apiKey: this.configService.get('OPENAI_API_KEY') });
     }
 
-
+    async getAllProducts() {
+        const url = this.configService.get<string>('GRAPH_URL') ?? 'https://graph.khuladev.co.za/graphql';
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: '*/*',
+            },
+            body: JSON.stringify({
+                operationName: null,
+                variables: {},
+                query: `{
+  getAllInputProducts {
+    id
+    name
+    labelLink
+    active
+  }
+}`,
+            }),
+        });
+        if (!response.ok) {
+            throw new Error(`GraphQL request failed: ${response.status} ${response.statusText}`);
+        }
+        const json = await response.json();
+        return json?.data?.getAllInputProducts ?? [];
+    }
     async injestCropData() {
         const crops = await this.cropRepository.find();
         // if (crops.length > 0) {
@@ -106,7 +134,51 @@ export class DataProcessing {
             return false;
         }
     }
+    async injestChemicals() {
+        const products = await this.getAllProducts();
+        console.log("products", products[0]);
+        let count = 0;
 
+        for (let i = 0; i < products.length; i++) {
+            const product = products[i];
+            count = i;
+            if (product.labelLink && product.labelLink.length > 0 && product.active) {
+                const parser = new PDFParse({ url: product.labelLink });
+                let pdf = "";
+                if (parser) {
+                    try {
+                        pdf = (await parser.getText())?.text || "";
+                    } catch (error) {
+                        console.log("error", error);
+                        pdf = "";
+                    }
+                }
+                let labelText = `${product.id}\n\n${product.name}\n\n ${pdf}`;
+                if (labelText.length > 0) {
+                    const [productEmbedding] = await this.geminiService.embedTexts([labelText]);
+                    let productData = {
+                        id: product.id,
+                        name: product.name,
+                        searchText: labelText,
+                        embedding: productEmbedding,
+                        labelLink: product.labelLink,
+                    }
+                    console.log("productData", productData);
+                    // return productData
+                    const response = await this.elasticService.elasticPost(`/khula_products/_update/${product.id}`, {
+                        doc: productData,
+                        doc_as_upsert: true
+                    });
+                    console.log("response", ` ${count} of ${products.length}`, product.id);
+                }
+            } else {
+                console.log("response", ` No label link ${count} of ${products.length}`, product.id);
+            }
+            console.log(i, products.length)
+
+        }
+        return count;
+    }
     /**
      * Checks if a URL is accessible by making a HEAD request
      * @param urlString - The URL to check
