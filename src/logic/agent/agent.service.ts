@@ -156,7 +156,7 @@ export class AgentService {
       ? await this.conversationService.getConversation(updatedConversation.id)
       : await this.conversationService.getConversation(conversation.id);
 
-    const audioPath = isVoiceMode ? await this.elevenlabsService.generateAudio(finalAnswer) : null;//'http://localhost:4000/voice/voice_1764709916703.mp3';
+    const audioPath = ""//isVoiceMode ? await this.elevenlabsService.generateAudio(finalAnswer) : null;//'http://localhost:4000/voice/voice_1764709916703.mp3';
 
     return {
       answer: finalAnswer,
@@ -223,7 +223,7 @@ export class AgentService {
     conversation: any,
     visionResult: any,
   ): Promise<any> {
-    
+
     const conversationContext = conversation.contextFrame || {};
     const dataResults: any = {};
 
@@ -241,7 +241,7 @@ export class AgentService {
     }
 
     // Handle chemical lookup
-    if (intent.needs.db_chemical||intent.needs.vector_search) {
+    if (intent.needs.db_chemical || intent.needs.vector_search) {
       let chemicalName = intent.targets.chemical;
       const crop = intent.targets.crop;
       const pest = intent.targets.pestOrDisease;
@@ -257,7 +257,7 @@ export class AgentService {
       // Search if we have: chemical name, OR crop, OR pest
       // This allows searching for "chemicals for moths on cabbage" even without a specific chemical name
       if (chemicalName || crop || pest) {
-        
+
         // Build query: use chemical name if provided, otherwise use crop + pest for semantic search
         let query = chemicalName || '';
 
@@ -534,6 +534,10 @@ export class AgentService {
 
   async injestCropData(user: User) {
     return this.dataProcessing.injestCropData();
+  }
+
+  async injestChemicalData(user: User) {
+    return this.dataProcessing.injestChemicals();
   }
 
   async injestPestData(user: User) {
